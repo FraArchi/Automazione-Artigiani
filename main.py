@@ -14,8 +14,9 @@ from typing import List
 
 app = FastAPI()
 
-# Configurazione Redis
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+# Configurazione Redis (Usa REDIS_URL se presente, altrimenti localhost)
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+r = redis.from_url(REDIS_URL, decode_responses=True)
 
 # Montaggio file statici per la Dashboard
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -23,7 +24,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # ==========================================
 # CONFIGURAZIONE
 # ==========================================
-QWEN_API_KEY = "sk-9d58c013cd1045a69224fd7dc91bf6c0" 
+QWEN_API_KEY = os.environ.get("QWEN_API_KEY", "sk-9d58c013cd1045a69224fd7dc91bf6c0") 
 SENDER_EMAIL = "k.fra.archi@gmail.com"
 SENDER_PASSWORD = "wcsh jdzd hglt fsoh" 
 
@@ -33,47 +34,42 @@ client = OpenAI(
 )
 
 # ==========================================
-# LOGICA EMAIL E RICEVITORI
+# LOGICA EMAIL E RICEVITORE UNICO (L'ULTIMO INSERITO)
 # ==========================================
 
-def get_receivers() -> List[str]:
-    """Recupera la lista dei ricevitori da Redis."""
-    receivers = list(r.smembers("receivers"))
-    if not receivers:
+def get_active_receiver() -> str:
+    """Recupera l'ultimo ricevitore inserito (quello attivo)."""
+    receiver = r.get("active_receiver")
+    if not receiver:
         # Fallback se il database è vuoto
-        return ["francesco.cybersec@gmail.com"]
-    return receivers
+        return "francesco.cybersec@gmail.com"
+    return receiver
 
-def send_email_to_all(file_path: str):
-    """Invia l'email a tutti i ricevitori salvati."""
-    receivers = get_receivers()
-    if not receivers:
-        print("⚠️ Nessun ricevitore configurato.")
-        return
-
-    print(f"Invio email a {len(receivers)} ricevitori: {receivers}")
+def send_email_to_active(file_path: str):
+    """Invia l'email all'ultimo destinatario salvato."""
+    receiver = get_active_receiver()
+    print(f"Invio email al destinatario attivo: {receiver}")
     
-    for receiver in receivers:
-        msg = MIMEMultipart()
-        msg['Subject'] = f'Nuovo Preventivo: {os.path.basename(file_path)}'
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = receiver
+    msg = MIMEMultipart()
+    msg['Subject'] = f'Nuovo Preventivo: {os.path.basename(file_path)}'
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = receiver
 
-        body = MIMEText("Ciao,\n\nIn allegato trovi il preventivo professionale generato automaticamente.\n\nSaluti,\nSistema Automazione Artigiani")
-        msg.attach(body)
+    body = MIMEText(f"Ciao,\n\nIn allegato trovi il preventivo professionale generato automaticamente.\n\nSaluti,\nSistema Automazione Artigiani")
+    msg.attach(body)
 
-        try:
-            with open(file_path, "rb") as f:
-                part = MIMEApplication(f.read(), Name=os.path.basename(file_path))
-                part['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
-                msg.attach(part)
-            
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-                server.login(SENDER_EMAIL, SENDER_PASSWORD)
-                server.send_message(msg)
-            print(f"✅ Email inviata con successo a {receiver}")
-        except Exception as e:
-            print(f"❌ Errore durante l'invio a {receiver}: {e}")
+    try:
+        with open(file_path, "rb") as f:
+            part = MIMEApplication(f.read(), Name=os.path.basename(file_path))
+            part['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+            msg.attach(part)
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.send_message(msg)
+        print(f"✅ Email inviata con successo a {receiver}")
+    except Exception as e:
+        print(f"❌ Errore durante l'invio a {receiver}: {e}")
 
 # ==========================================
 # LOGICA PREVENTIVI
@@ -133,20 +129,20 @@ async def serve_dashboard():
 
 @app.get("/api/receivers")
 async def api_get_receivers():
-    return {"receivers": get_receivers()}
+    return {"receivers": [get_active_receiver()]}
 
 @app.post("/api/receivers")
 async def api_add_receiver(request: Request):
     data = await request.json()
     email = data.get("email")
     if email:
-        r.sadd("receivers", email)
+        r.set("active_receiver", email)
         return {"status": "success"}
     raise HTTPException(status_code=400, detail="Email mancante")
 
 @app.delete("/api/receivers/{email}")
 async def api_delete_receiver(email: str):
-    r.srem("receivers", email)
+    r.delete("active_receiver")
     return {"status": "success"}
 
 @app.post("/webhook")
@@ -164,5 +160,5 @@ async def receive_form(request: Request):
     if not costs: return {"status": "error"}
 
     file_path = create_professional_quote(data, costs)
-    send_email_to_all(file_path)
+    send_email_to_active(file_path)
     return {"status": "success"}
