@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.docx
+*.log
+.env
+node_modules/
+.DS_Store

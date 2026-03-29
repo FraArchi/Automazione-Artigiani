@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Automazione Artigiani</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛠️ Automazione Artigiani</h1>
+            <p>Pannello di Controllo Preventivi</p>
+        </header>
+
+        <section class="status-card">
+            <div class="status-indicator">
+                <span class="dot"></span>
+                <span>Sistema Online (Live)</span>
+            </div>
+            <a href="https://tally.so/r/RGR9JJ" target="_blank" class="btn-primary">Apri Form Tally 🚀</a>
+        </section>
+
+        <section class="management-card">
+            <h2>Gestione Ricevitori</h2>
+            <p>Le email in questa lista riceveranno i preventivi generati.</p>
+            
+            <div class="add-receiver">
+                <input type="email" id="new-email" placeholder="Inserisci nuova email...">
+                <button onclick="addReceiver()">Aggiungi</button>
+            </div>
+
+            <ul id="receiver-list">
+                <!-- Caricato dinamicamente -->
+                <li class="loading">Caricamento...</li>
+            </ul>
+        </section>
+
+        <footer>
+            <p>&copy; 2026 Automazione Artigiani - Grottaminarda</p>
+        </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
