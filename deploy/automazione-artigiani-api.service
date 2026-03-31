@@ -1,0 +1,20 @@
+[Unit]
+Description=Automazione Artigiani API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fra
+Group=fra
+WorkingDirectory=/home/fra/preventivatore-artigiani
+EnvironmentFile=/home/fra/preventivatore-artigiani/.env.vm
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/fra/preventivatore-artigiani/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8010
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=Automazione Artigiani Hermes Reviewer
+After=network-online.target automazione-artigiani-api.service
+Wants=network-online.target
+Requires=automazione-artigiani-api.service
+
+[Service]
+Type=simple
+User=fra
+Group=fra
+WorkingDirectory=/home/fra/preventivatore-artigiani
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/fra/preventivatore-artigiani/venv/bin/python hermes_reviewer.py --base-url http://127.0.0.1:8010 --watch 30
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

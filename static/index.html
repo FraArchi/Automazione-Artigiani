@@ -3,42 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Automazione Artigiani</title>
+    <title>Automazione Artigiani</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>🛠️ Automazione Artigiani</h1>
-            <p>Pannello di Controllo Preventivi</p>
+        <header class="page-header">
+            <div>
+                <h1>🛠️ Automazione Artigiani</h1>
+                <p>Console operativa lead → bozza → invio</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-secondary" onclick="refreshDashboard()">Aggiorna</button>
+                <a href="https://tally.so/r/RGR9JJ" target="_blank" class="btn-primary">Apri Form Tally</a>
+            </div>
         </header>
 
-        <section class="status-card">
-            <div class="status-indicator">
-                <span class="dot"></span>
-                <span>Sistema Online (Live)</span>
+        <section class="panel hero-panel">
+            <div>
+                <h2>Stato sistema</h2>
+                <p id="system-status">Caricamento stato...</p>
             </div>
-            <a href="https://tally.so/r/RGR9JJ" target="_blank" class="btn-primary">Apri Form Tally 🚀</a>
+            <div class="receiver-box">
+                <label for="new-email">Destinatario attivo</label>
+                <div class="receiver-form">
+                    <input type="email" id="new-email" placeholder="owner@example.com">
+                    <button onclick="saveReceiver()">Salva</button>
+                </div>
+                <small id="receiver-current">Caricamento destinatario...</small>
+            </div>
         </section>
 
-        <section class="management-card">
-            <h2>Gestione Ricevitori</h2>
-            <p>Le email in questa lista riceveranno i preventivi generati.</p>
-            
-            <div class="add-receiver">
-                <input type="email" id="new-email" placeholder="Inserisci nuova email...">
-                <button onclick="addReceiver()">Aggiungi</button>
-            </div>
-
-            <ul id="receiver-list">
-                <!-- Caricato dinamicamente -->
-                <li class="loading">Caricamento...</li>
-            </ul>
+        <section class="summary-grid" id="summary-grid">
+            <div class="summary-card"><span>Nuove</span><strong id="count-new">0</strong></div>
+            <div class="summary-card"><span>Incompleti</span><strong id="count-incomplete">0</strong></div>
+            <div class="summary-card"><span>Pronti</span><strong id="count-ready">0</strong></div>
+            <div class="summary-card"><span>Bozze</span><strong id="count-drafts">0</strong></div>
+            <div class="summary-card"><span>Inviati</span><strong id="count-sent">0</strong></div>
+            <div class="summary-card"><span>Errori</span><strong id="count-error">0</strong></div>
         </section>
 
-        <footer>
-            <p>&copy; 2026 Automazione Artigiani - Grottaminarda</p>
-        </footer>
+        <section class="board">
+            <div class="panel board-column">
+                <div class="column-header">
+                    <h2>Richieste incomplete</h2>
+                    <span id="badge-incomplete" class="badge">0</span>
+                </div>
+                <div id="list-incomplete" class="lead-list empty-state">Nessuna richiesta incompleta.</div>
+            </div>
+
+            <div class="panel board-column">
+                <div class="column-header">
+                    <h2>Bozze da approvare</h2>
+                    <span id="badge-draft" class="badge">0</span>
+                </div>
+                <div id="list-draft" class="lead-list empty-state">Nessuna bozza pronta.</div>
+            </div>
+
+            <div class="panel board-column">
+                <div class="column-header">
+                    <h2>Preventivi inviati</h2>
+                    <span id="badge-sent" class="badge">0</span>
+                </div>
+                <div id="list-sent" class="lead-list empty-state">Nessun preventivo inviato.</div>
+            </div>
+        </section>
     </div>
 
     <script src="/static/script.js"></script>
