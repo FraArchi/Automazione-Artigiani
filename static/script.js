@@ -12,12 +12,14 @@ async function loadSummary() {
 
     document.getElementById('count-new').textContent = data.counts.new || 0;
     document.getElementById('count-incomplete').textContent = data.counts.incomplete || 0;
+    document.getElementById('count-needs-review').textContent = data.counts.needs_review || 0;
     document.getElementById('count-ready').textContent = data.counts.ready_for_quote || 0;
     document.getElementById('count-drafts').textContent = data.counts.draft_quotes || 0;
     document.getElementById('count-sent').textContent = data.counts.sent || 0;
     document.getElementById('count-error').textContent = data.counts.error || 0;
 
     document.getElementById('badge-incomplete').textContent = data.counts.incomplete || 0;
+    document.getElementById('badge-needs-review').textContent = data.counts.needs_review || 0;
     document.getElementById('badge-draft').textContent = data.counts.draft_quotes || 0;
     document.getElementById('badge-sent').textContent = data.counts.sent || 0;
 
@@ -28,6 +30,8 @@ async function loadSummary() {
     document.getElementById('system-status').textContent = systemStatus;
     document.getElementById('receiver-current').textContent = `Destinatario attivo: ${data.active_receiver_email}`;
     document.getElementById('new-email').value = data.active_receiver_email || '';
+
+    renderActivityLog(data.recent_activity || []);
 }
 
 async function loadLeads() {
@@ -36,10 +40,12 @@ async function loadLeads() {
     const leads = data.leads || [];
 
     const incomplete = leads.filter(lead => lead.status === 'incomplete');
+    const needsReview = leads.filter(lead => lead.status === 'needs_review');
     const drafts = leads.filter(lead => lead.latest_quote && lead.latest_quote.status === 'draft');
     const sent = leads.filter(lead => lead.status === 'sent');
 
     renderLeadList('list-incomplete', incomplete, renderIncompleteLead);
+    renderLeadList('list-needs-review', needsReview, renderNeedsReviewLead);
     renderLeadList('list-draft', drafts, renderDraftLead);
     renderLeadList('list-sent', sent, renderSentLead);
 }
@@ -50,6 +56,7 @@ function renderLeadList(elementId, leads, renderer) {
     if (!leads.length) {
         container.className = 'lead-list empty-state';
         if (elementId === 'list-incomplete') container.textContent = 'Nessuna richiesta incompleta.';
+        if (elementId === 'list-needs-review') container.textContent = 'Nessuna richiesta da verificare.';
         if (elementId === 'list-draft') container.textContent = 'Nessuna bozza pronta.';
         if (elementId === 'list-sent') container.textContent = 'Nessun preventivo inviato.';
         return;
@@ -60,15 +67,30 @@ function renderLeadList(elementId, leads, renderer) {
 }
 
 function renderIncompleteLead(lead) {
-    const missing = (lead.missing_fields || []).map(field => `<span class="pill warning">${field}</span>`).join('');
+    const missing = (lead.missing_fields || []).map(field => `<span class="pill warning">${escapeHtml(field)}</span>`).join('');
     return `
         <article class="lead-card">
             <div class="lead-top">
                 <h3>${escapeHtml(lead.client_name || 'Cliente non indicato')}</h3>
                 <span class="status status-warning">Incompleto</span>
             </div>
+            <p class="lead-meta">Fonte: ${renderSourceLabel(lead.source)}</p>
             <p>${escapeHtml(lead.description || 'Nessuna descrizione')}</p>
             <div class="pill-row">${missing}</div>
+            <p class="lead-note">${escapeHtml(lead.review_summary || '')}</p>
+        </article>
+    `;
+}
+
+function renderNeedsReviewLead(lead) {
+    return `
+        <article class="lead-card lead-card-attention">
+            <div class="lead-top">
+                <h3>${escapeHtml(lead.client_name || 'Cliente non indicato')}</h3>
+                <span class="status status-danger">Needs review</span>
+            </div>
+            <p class="lead-meta">Fonte: ${renderSourceLabel(lead.source)}</p>
+            <p>${escapeHtml(lead.description || 'Nessuna descrizione')}</p>
             <p class="lead-note">${escapeHtml(lead.review_summary || '')}</p>
         </article>
     `;
@@ -83,6 +105,7 @@ function renderDraftLead(lead) {
                 <h3>${escapeHtml(lead.client_name || 'Cliente non indicato')}</h3>
                 <span class="status status-info">Bozza</span>
             </div>
+            <p class="lead-meta">Fonte: ${renderSourceLabel(lead.source)}</p>
             <p>${escapeHtml(lead.description || 'Nessuna descrizione')}</p>
             <p class="lead-note">${escapeHtml(lead.review_summary || '')}</p>
             <div class="quote-meta">
@@ -104,10 +127,34 @@ function renderSentLead(lead) {
                 <h3>${escapeHtml(lead.client_name || 'Cliente non indicato')}</h3>
                 <span class="status status-success">Inviato</span>
             </div>
+            <p class="lead-meta">Fonte: ${renderSourceLabel(lead.source)}</p>
             <p>${escapeHtml(lead.description || 'Nessuna descrizione')}</p>
             <p class="lead-note">Ultimo preventivo inviato: ${quote ? escapeHtml(quote.sent_at || quote.generated_at || '') : 'n/d'}</p>
         </article>
     `;
+}
+
+function renderActivityLog(items) {
+    const container = document.getElementById('activity-log');
+    document.getElementById('badge-activity').textContent = items.length;
+
+    if (!items.length) {
+        container.className = 'activity-list empty-state';
+        container.textContent = 'Nessuna attività recente.';
+        return;
+    }
+
+    container.className = 'activity-list';
+    container.innerHTML = items.map(item => `
+        <article class="activity-item">
+            <div class="activity-top">
+                <strong>${escapeHtml(item.event_type)}</strong>
+                <span>${escapeHtml(formatDate(item.created_at))}</span>
+            </div>
+            <p>${escapeHtml(item.message)}</p>
+            <small>actor=${escapeHtml(item.actor || 'system')} ${item.lead_id ? `• lead #${escapeHtml(item.lead_id)}` : ''}</small>
+        </article>
+    `).join('');
 }
 
 async function saveReceiver() {
@@ -141,6 +188,18 @@ async function sendQuote(quoteId) {
     }
 
     await refreshDashboard();
+}
+
+function renderSourceLabel(source) {
+    if (!source) return 'n/d';
+    return escapeHtml(source.replaceAll('_', ' '));
+}
+
+function formatDate(value) {
+    if (!value) return 'n/d';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('it-IT');
 }
 
 function escapeHtml(value) {

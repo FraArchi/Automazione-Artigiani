@@ -126,7 +126,7 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 def dumps_json(data: Any) -> str:
-    return json.dumps(data, ensure_ascii=False)
+    return json.dumps(data, ensure_ascii=False, sort_keys=True)
 
 
 def loads_json(data: str | None, default: Any) -> Any:
@@ -140,6 +140,48 @@ def loads_json(data: str | None, default: Any) -> Any:
 
 def serialize_datetime(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
+
+
+def serialize_activity(item: ActivityLog) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "lead_id": item.lead_id,
+        "event_type": item.event_type,
+        "message": item.message,
+        "actor": item.actor,
+        "created_at": serialize_datetime(item.created_at),
+    }
+
+
+def detect_source(request: Request, payload: dict[str, Any]) -> str:
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    data_section = payload.get("data") if isinstance(payload, dict) else None
+
+    if headers.get("x-tally-signature") or headers.get("x-tally-event-id"):
+        return "tally_webhook"
+
+    if isinstance(data_section, dict) and (
+        data_section.get("formId")
+        or data_section.get("responseId")
+        or isinstance(data_section.get("fields"), list)
+    ):
+        return "tally_webhook"
+
+    provider = (payload.get("source") or payload.get("provider") or "").strip().lower() if isinstance(payload, dict) else ""
+    if provider:
+        return provider.replace(" ", "_")
+
+    return "webhook"
+
+
+def find_duplicate_lead(db, source: str, payload: dict[str, Any]) -> Lead | None:
+    raw_payload = dumps_json(payload)
+    return (
+        db.query(Lead)
+        .filter(Lead.source == source, Lead.raw_payload == raw_payload)
+        .order_by(Lead.id.desc())
+        .first()
+    )
 
 
 def db_session():
@@ -456,9 +498,11 @@ async def api_dashboard_summary():
     db = SessionLocal()
     try:
         leads = db.query(Lead).all()
+        recent_activity = db.query(ActivityLog).order_by(ActivityLog.created_at.desc(), ActivityLog.id.desc()).limit(10).all()
         counts = {
             "new": 0,
             "incomplete": 0,
+            "needs_review": 0,
             "ready_for_quote": 0,
             "quoted": 0,
             "sent": 0,
@@ -474,7 +518,19 @@ async def api_dashboard_summary():
             "counts": counts,
             "active_receiver_email": get_active_receiver(db),
             "email_enabled": email_sending_enabled(db),
+            "recent_activity": [serialize_activity(item) for item in recent_activity],
         }
+    finally:
+        db.close()
+
+
+@app.get("/api/activity-log")
+async def api_activity_log(limit: int = 20):
+    db = SessionLocal()
+    try:
+        safe_limit = max(1, min(limit, 100))
+        items = db.query(ActivityLog).order_by(ActivityLog.created_at.desc(), ActivityLog.id.desc()).limit(safe_limit).all()
+        return {"items": [serialize_activity(item) for item in items]}
     finally:
         db.close()
 
@@ -602,6 +658,7 @@ async def receive_form(request: Request):
         form_data = await request.form()
         payload = dict(form_data)
 
+    source = detect_source(request, payload)
     normalized = normalize_payload(payload)
     initial_status = "new"
     initial_missing_fields: list[str] = []
@@ -610,8 +667,29 @@ async def receive_form(request: Request):
 
     db = SessionLocal()
     try:
+        duplicate_lead = find_duplicate_lead(db, source, payload)
+        if duplicate_lead:
+            latest_quote = sorted(duplicate_lead.quotes, key=lambda quote: (quote.version, quote.id))[-1] if duplicate_lead.quotes else None
+            log_event(
+                db,
+                "webhook_duplicate",
+                f"Webhook duplicato ignorato per {duplicate_lead.client_name or 'cliente sconosciuto'}",
+                lead_id=duplicate_lead.id,
+            )
+            return {
+                "status": "duplicate",
+                "duplicate": True,
+                "lead_id": duplicate_lead.id,
+                "lead_status": duplicate_lead.status,
+                "quote_id": latest_quote.id if latest_quote else None,
+                "quote_status": latest_quote.status if latest_quote else None,
+                "missing_fields": loads_json(duplicate_lead.missing_fields, []),
+                "review_summary": duplicate_lead.review_summary,
+                "suggested_action": duplicate_lead.suggested_action,
+            }
+
         lead = Lead(
-            source="webhook",
+            source=source,
             client_name=normalized.get("client_name"),
             client_email=normalized.get("client_email"),
             client_phone=normalized.get("client_phone"),

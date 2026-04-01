@@ -37,6 +37,7 @@
         <section class="summary-grid" id="summary-grid">
             <div class="summary-card"><span>Nuove</span><strong id="count-new">0</strong></div>
             <div class="summary-card"><span>Incompleti</span><strong id="count-incomplete">0</strong></div>
+            <div class="summary-card"><span>Da verificare</span><strong id="count-needs-review">0</strong></div>
             <div class="summary-card"><span>Pronti</span><strong id="count-ready">0</strong></div>
             <div class="summary-card"><span>Bozze</span><strong id="count-drafts">0</strong></div>
             <div class="summary-card"><span>Inviati</span><strong id="count-sent">0</strong></div>
@@ -54,6 +55,14 @@
 
             <div class="panel board-column">
                 <div class="column-header">
+                    <h2>Da verificare</h2>
+                    <span id="badge-needs-review" class="badge badge-danger">0</span>
+                </div>
+                <div id="list-needs-review" class="lead-list empty-state">Nessuna richiesta da verificare.</div>
+            </div>
+
+            <div class="panel board-column">
+                <div class="column-header">
                     <h2>Bozze da approvare</h2>
                     <span id="badge-draft" class="badge">0</span>
                 </div>
@@ -67,6 +76,14 @@
                 </div>
                 <div id="list-sent" class="lead-list empty-state">Nessun preventivo inviato.</div>
             </div>
+        </section>
+
+        <section class="panel activity-panel">
+            <div class="column-header">
+                <h2>Activity log</h2>
+                <span class="badge" id="badge-activity">0</span>
+            </div>
+            <div id="activity-log" class="activity-list empty-state">Nessuna attività recente.</div>
         </section>
     </div>
 

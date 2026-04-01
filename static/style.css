@@ -86,7 +86,7 @@ body {
 
 .summary-grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 14px;
     margin-bottom: 20px;
 }
@@ -110,7 +110,7 @@ body {
 }
 
 .board {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .board-column {
@@ -147,6 +147,12 @@ body {
 .badge {
     background: rgba(37, 99, 235, 0.18);
     color: #bfdbfe;
+}
+
+.badge-danger,
+.status-danger {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fecaca;
 }
 
 .status-info {
@@ -186,6 +192,15 @@ body {
     margin: 10px 0;
 }
 
+.lead-card-attention {
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+.lead-meta {
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
 .pill-row,
 .card-actions {
     display: flex;
@@ -203,6 +218,37 @@ body {
     display: flex;
     align-items: center;
     min-height: 180px;
+}
+
+.activity-panel {
+    margin-top: 20px;
+}
+
+.activity-list {
+    display: grid;
+    gap: 12px;
+}
+
+.activity-item {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    background: rgba(11, 18, 32, 0.9);
+}
+
+.activity-item p {
+    margin: 8px 0;
+}
+
+.activity-item small {
+    color: var(--muted);
+}
+
+.activity-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted);
 }
 
 button,
