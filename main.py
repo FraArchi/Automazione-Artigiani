@@ -25,8 +25,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./local.db")
 DEFAULT_RECEIVER_EMAIL = os.environ.get("DEFAULT_RECEIVER_EMAIL", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "")
 QUOTE_OUTPUT_DIR = Path(os.environ.get("QUOTE_OUTPUT_DIR", "quotes"))
 QUOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
 
 print(f"📡 DATABASE_URL trovato: {'Sì' if DATABASE_URL else 'No'}")
 
@@ -255,16 +257,20 @@ def normalize_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
             extracted = {field.get("label"): field.get("value") for field in data_section["fields"]}
 
     normalized = {
-        "client_name": extracted.get("Cliente") or extracted.get("Nome") or extracted.get("client_name"),
+        "client_name": extracted.get("Cliente") or extracted.get("Nome") or extracted.get("Nome del Cliente") or extracted.get("client_name"),
         "client_email": extracted.get("Email") or extracted.get("email") or extracted.get("client_email"),
         "client_phone": extracted.get("Telefono") or extracted.get("Telefono/WhatsApp") or extracted.get("client_phone"),
-        "job_type": extracted.get("Mestiere") or extracted.get("Tipologia_Richiesta") or extracted.get("job_type"),
-        "description": extracted.get("Lavoro") or extracted.get("Dettagli") or extracted.get("description"),
-        "ore": extracted.get("Ore") or extracted.get("ore"),
-        "costo_orario": extracted.get("Costo orario") or extracted.get("costo_orario"),
-        "materiali": extracted.get("Materiali") or extracted.get("materiali"),
+        "client_address": extracted.get("Indirizzo del Cliente") or extracted.get("Indirizzo") or extracted.get("client_address"),
+        "job_type": extracted.get("Mestiere") or extracted.get("Mestiere / tipo di attività") or extracted.get("Tipologia_Richiesta") or extracted.get("job_type"),
+        "description": extracted.get("Lavoro") or extracted.get("Descrizione del lavoro da svolgere") or extracted.get("Dettagli") or extracted.get("description"),
+        "ore": extracted.get("Ore") or extracted.get("Ore di lavoro stimate") or extracted.get("ore"),
+        "costo_orario": extracted.get("Costo orario") or extracted.get("Costo orario (€)") or extracted.get("costo_orario"),
+        "materiali": extracted.get("Prezzo materiali (€)") or extracted.get("Materiali") or extracted.get("materiali"),
+        "materiali_descrizione": extracted.get("Materiali necessari") or extracted.get("materiali_descrizione"),
         "artisan_name": extracted.get("Nome artigiano") or extracted.get("artisan_name"),
-        "notes": extracted.get("Note") or extracted.get("notes"),
+        "artisan_email": extracted.get("Email artigiano") or extracted.get("artisan_email"),
+        "notes": extracted.get("Note") or extracted.get("Eventuali note aggiuntive") or extracted.get("notes"),
+        "urgency": extracted.get("Urgenza del lavoro") or extracted.get("urgency"),
     }
     return normalized
 
@@ -332,11 +338,18 @@ def create_professional_quote(lead: Lead, normalized: dict[str, Any], costs: dic
     header.alignment = 2
 
     doc.add_heading("PREVENTIVO DI SPESA", 0)
-    doc.add_paragraph(
+    client_address = normalized.get("client_address")
+    materials_description = normalized.get("materiali_descrizione")
+    urgency = normalized.get("urgency")
+
+    header_text = (
         f"Data: {datetime.now().strftime('%d/%m/%Y')}\n"
         f"Validità: 30 giorni\n"
         f"Cliente: {client_name}"
     )
+    if client_address:
+        header_text += f"\nIndirizzo: {client_address}"
+    doc.add_paragraph(header_text)
     doc.add_heading(f"Spett.le {client_name}", level=2)
     doc.add_paragraph(f"Oggetto: {normalized.get('description', 'Intervento')}")
 
@@ -355,10 +368,17 @@ def create_professional_quote(lead: Lead, normalized: dict[str, Any], costs: dic
     manodopera_row[3].text = f"€{costs['manodopera']:.2f}"
 
     materiali_row = table.add_row().cells
-    materiali_row[0].text = "Materiali"
+    materiali_row[0].text = f"Materiali{': ' + str(materials_description) if materials_description else ''}"
     materiali_row[1].text = "1"
     materiali_row[2].text = f"€{costs['materiali']:.2f}"
     materiali_row[3].text = f"€{costs['materiali']:.2f}"
+
+    if urgency or normalized.get("notes"):
+        details = doc.add_paragraph()
+        if urgency:
+            details.add_run(f"Urgenza: {urgency}\n")
+        if normalized.get("notes"):
+            details.add_run(f"Note: {normalized.get('notes')}")
 
     footer = doc.add_paragraph()
     footer.alignment = 2
@@ -422,6 +442,61 @@ def email_sending_enabled(db) -> bool:
     return config_value.lower() == "true"
 
 
+def build_public_url(path: str) -> str:
+    base_url = PUBLIC_BASE_URL.rstrip("/")
+    if not base_url:
+        return path
+    return f"{base_url}{path}"
+
+
+def send_email_message(receiver: str, subject: str, body: str, attachment_path: str | None = None) -> None:
+    msg = MIMEMultipart()
+    msg["Subject"] = subject
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = receiver
+    msg.attach(MIMEText(body))
+
+    if attachment_path:
+        with open(attachment_path, "rb") as file_handle:
+            attachment_name = Path(attachment_path).name
+            attachment = MIMEApplication(file_handle.read(), Name=attachment_name)
+            attachment["Content-Disposition"] = f'attachment; filename="{attachment_name}"'
+            msg.attach(attachment)
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.send_message(msg)
+
+
+def notify_artisan_quote_ready(db, lead: Lead, quote: Quote) -> bool:
+    if not email_sending_enabled(db) or not SENDER_EMAIL or not SENDER_PASSWORD:
+        return False
+
+    normalized = loads_json(lead.normalized_payload, {})
+    artisan_email = (normalized.get("artisan_email") or "").strip()
+    if not artisan_email:
+        return False
+
+    download_url = build_public_url(f"/api/quotes/{quote.id}/download")
+    body = (
+        f"Ciao {normalized.get('artisan_name') or 'artigiano'},\n\n"
+        f"La bozza del preventivo per {lead.client_name or 'cliente'} è pronta.\n"
+        f"Descrizione: {lead.description or 'n/d'}\n"
+        f"Totale bozza: €{quote.total:.2f}\n\n"
+        f"Puoi scaricare il documento qui: {download_url}\n"
+        f"In allegato trovi anche il file .docx.\n\n"
+        "Controlla il preventivo prima di inviarlo al cliente finale."
+    )
+    send_email_message(
+        artisan_email,
+        f"Bozza preventivo pronta: {lead.client_name or 'cliente'}",
+        body,
+        attachment_path=quote.file_path,
+    )
+    log_event(db, "quote_ready_notified", f"Bozza notificata all'artigiano {artisan_email}", lead_id=lead.id, actor="system")
+    return True
+
+
 def generate_quote_for_lead(db, lead: Lead) -> Quote:
     normalized = loads_json(lead.normalized_payload, {})
     costs = calculate_costs(normalized)
@@ -443,6 +518,10 @@ def generate_quote_for_lead(db, lead: Lead) -> Quote:
     db.commit()
     db.refresh(quote)
     log_event(db, "quote_generated", f"Bozza preventivo v{current_version} generata", lead_id=lead.id)
+    try:
+        notify_artisan_quote_ready(db, lead, quote)
+    except Exception as exc:
+        log_event(db, "quote_notification_failed", f"Notifica artigiano fallita: {exc}", lead_id=lead.id, actor="system")
     return quote
 
 
@@ -458,25 +537,12 @@ def send_quote_email(db, quote: Quote) -> None:
         raise HTTPException(status_code=404, detail="Lead not found for quote")
 
     receiver = get_active_receiver(db)
-    msg = MIMEMultipart()
-    msg["Subject"] = f"Nuovo Preventivo: {Path(quote.file_path).name}"
-    msg["From"] = SENDER_EMAIL
-    msg["To"] = receiver
-    msg.attach(
-        MIMEText(
-            "Ciao,\n\nIn allegato trovi il preventivo generato dal sistema.\n\n"
-            "Ricorda di verificare i dettagli prima dell'invio definitivo al cliente."
-        )
+    send_email_message(
+        receiver,
+        f"Nuovo Preventivo: {Path(quote.file_path).name}",
+        "Ciao,\n\nIn allegato trovi il preventivo generato dal sistema.\n\nRicorda di verificare i dettagli prima dell'invio definitivo al cliente.",
+        attachment_path=quote.file_path,
     )
-
-    with open(quote.file_path, "rb") as file_handle:
-        attachment = MIMEApplication(file_handle.read(), Name=Path(quote.file_path).name)
-        attachment["Content-Disposition"] = f'attachment; filename="{Path(quote.file_path).name}"'
-        msg.attach(attachment)
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.send_message(msg)
 
     quote.status = "sent"
     quote.sent_at = now_utc()
@@ -595,6 +661,24 @@ async def api_generate_quote(lead_id: int):
 
         quote = generate_quote_for_lead(db, lead)
         return {"status": "success", "quote": serialize_quote(quote), "lead": serialize_lead(lead)}
+    finally:
+        db.close()
+
+
+@app.get("/api/quotes/{quote_id}/download")
+async def api_download_quote(quote_id: int):
+    db = SessionLocal()
+    try:
+        quote = db.query(Quote).filter(Quote.id == quote_id).first()
+        if not quote:
+            raise HTTPException(status_code=404, detail="Quote not found")
+        if not os.path.exists(quote.file_path):
+            raise HTTPException(status_code=404, detail="Quote file not found")
+        return FileResponse(
+            quote.file_path,
+            filename=Path(quote.file_path).name,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
     finally:
         db.close()
 

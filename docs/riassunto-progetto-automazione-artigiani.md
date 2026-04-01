@@ -257,7 +257,7 @@ Verifica che:
 - un lead senza contatto venga marcato `incomplete`
 
 Stato test al momento dell'ultimo controllo:
-- `6 passed`
+- `10 passed`
 
 ## 10. Deploy always-on sulla VM Google Cloud
 
@@ -318,6 +318,10 @@ consentire a Hermes sulla VM di leggere lo stato del progetto da chat WhatsApp.
 
 ### Script aggiunto
 - `scripts/artigiani_status.py`
+
+### Endpoint utili aggiunti di recente
+- `GET /api/activity-log`
+- `GET /api/quotes/{quote_id}/download`
 
 ### Wrapper installato sulla VM
 Comando disponibile:

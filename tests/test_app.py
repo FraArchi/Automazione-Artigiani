@@ -1,17 +1,42 @@
 import importlib
+import os
 import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 
+class FakeSMTP:
+    sent_messages = []
+
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def login(self, username, password):
+        self.username = username
+        self.password = password
+
+    def send_message(self, message):
+        FakeSMTP.sent_messages.append(message)
+
+
 def load_app(monkeypatch, tmp_path: Path):
     db_path = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     monkeypatch.setenv("ENVIRONMENT", "test")
-    monkeypatch.setenv("EMAIL_ENABLED", "false")
-    monkeypatch.setenv("DEFAULT_RECEIVER_EMAIL", "owner@example.com")
-    monkeypatch.setenv("QUOTE_OUTPUT_DIR", str(tmp_path / "quotes"))
+    if "EMAIL_ENABLED" not in os.environ:
+        monkeypatch.setenv("EMAIL_ENABLED", "false")
+    if "DEFAULT_RECEIVER_EMAIL" not in os.environ:
+        monkeypatch.setenv("DEFAULT_RECEIVER_EMAIL", "owner@example.com")
+    if "QUOTE_OUTPUT_DIR" not in os.environ:
+        monkeypatch.setenv("QUOTE_OUTPUT_DIR", str(tmp_path / "quotes"))
     monkeypatch.chdir("/home/fra/Documenti/progetti/automazione-artigiani")
 
     if "main" in sys.modules:
@@ -45,6 +70,31 @@ def build_tally_payload(response_id: str = "resp_123"):
     }
 
 
+def build_real_tally_payload(response_id: str = "resp_real"):
+    return {
+        "eventId": f"evt_{response_id}",
+        "eventType": "FORM_RESPONSE",
+        "data": {
+            "formId": "form_real",
+            "responseId": response_id,
+            "fields": [
+                {"label": "Nome artigiano", "value": "Artigiano Test Hermes"},
+                {"label": "Mestiere / tipo di attività", "value": "Elettricista"},
+                {"label": "Email artigiano", "value": "artigiano.test@example.com"},
+                {"label": "Nome del Cliente", "value": "Cliente Tally Reale"},
+                {"label": "Indirizzo del Cliente", "value": "Via Roma 123, Milano"},
+                {"label": "Descrizione del lavoro da svolgere", "value": "Installazione plafoniera e controllo impianto cucina"},
+                {"label": "Materiali necessari", "value": "Plafoniera, morsetti, minuteria"},
+                {"label": "Ore di lavoro stimate", "value": "3"},
+                {"label": "Costo orario (€)", "value": "45"},
+                {"label": "Eventuali note aggiuntive", "value": "Test Tally reale end-to-end Hermes"},
+                {"label": "Prezzo materiali (€)", "value": "60"},
+                {"label": "Urgenza del lavoro", "value": "Media"},
+            ],
+        },
+    }
+
+
 def test_webhook_with_tally_payload_sets_source_and_creates_new_lead_without_draft_quote(monkeypatch, tmp_path):
     main = load_app(monkeypatch, tmp_path)
     client = TestClient(main.app)
@@ -72,6 +122,28 @@ def test_webhook_with_tally_payload_sets_source_and_creates_new_lead_without_dra
     summary = client.get("/api/dashboard/summary").json()
     assert summary["counts"]["new"] == 1
     assert summary["counts"]["draft_quotes"] == 0
+
+
+def test_real_tally_labels_are_normalized_correctly(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    response = client.post("/webhook", json=build_real_tally_payload())
+    assert response.status_code == 200
+
+    lead = client.get("/api/leads").json()["leads"][0]
+    normalized = lead["normalized_payload"]
+
+    assert lead["source"] == "tally_webhook"
+    assert lead["client_name"] == "Cliente Tally Reale"
+    assert normalized["artisan_name"] == "Artigiano Test Hermes"
+    assert normalized["artisan_email"] == "artigiano.test@example.com"
+    assert normalized["job_type"] == "Elettricista"
+    assert normalized["description"] == "Installazione plafoniera e controllo impianto cucina"
+    assert normalized["materiali"] == "60"
+    assert normalized["notes"] == "Test Tally reale end-to-end Hermes"
+    assert normalized["client_address"] == "Via Roma 123, Milano"
+    assert normalized["urgency"] == "Media"
 
 
 def test_duplicate_webhook_returns_existing_lead_without_creating_duplicate(monkeypatch, tmp_path):
@@ -125,6 +197,50 @@ def test_activity_log_endpoint_and_summary_include_recent_events_and_needs_revie
     assert summary["counts"]["needs_review"] == 1
     assert len(summary["recent_activity"]) >= 2
     assert summary["recent_activity"][0]["event_type"] == "lead_review_updated"
+
+
+def test_generate_quote_notifies_artisan_and_download_endpoint_works(monkeypatch, tmp_path):
+    monkeypatch.setenv("EMAIL_ENABLED", "true")
+    monkeypatch.setenv("SENDER_EMAIL", "noreply@example.com")
+    monkeypatch.setenv("SENDER_PASSWORD", "secret-password")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://app.example.com")
+    main = load_app(monkeypatch, tmp_path)
+    FakeSMTP.sent_messages.clear()
+    monkeypatch.setattr(main.smtplib, "SMTP_SSL", FakeSMTP)
+    client = TestClient(main.app)
+
+    create_response = client.post("/webhook", json=build_real_tally_payload(response_id="resp_notify"))
+    lead_id = create_response.json()["lead_id"]
+
+    review_response = client.patch(
+        f"/api/leads/{lead_id}/review",
+        json={
+            "status": "ready_for_quote",
+            "missing_fields": [],
+            "review_summary": "Lead pronto per bozza.",
+            "suggested_action": "generate_quote",
+        },
+    )
+    assert review_response.status_code == 200
+
+    generate_response = client.post(f"/api/leads/{lead_id}/generate-quote")
+    assert generate_response.status_code == 200
+    quote = generate_response.json()["quote"]
+
+    assert len(FakeSMTP.sent_messages) == 1
+    message = FakeSMTP.sent_messages[0]
+    text_part = message.get_payload()[0].get_payload(decode=True).decode()
+    assert message["To"] == "artigiano.test@example.com"
+    assert "Bozza preventivo pronta" in message["Subject"]
+    assert f"/api/quotes/{quote['id']}/download" in text_part
+    assert quote["status"] == "draft"
+
+    download_response = client.get(f"/api/quotes/{quote['id']}/download")
+    assert download_response.status_code == 200
+    assert "attachment; filename=" in download_response.headers["content-disposition"]
+
+    activity = client.get("/api/activity-log?limit=10").json()["items"]
+    assert any(item["event_type"] == "quote_ready_notified" for item in activity)
 
 
 def test_webhook_with_missing_data_still_saves_new_lead_for_reviewer(monkeypatch, tmp_path):
