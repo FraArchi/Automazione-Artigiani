@@ -327,7 +327,7 @@ Se vuoi la strada più veloce verso l'uso reale, il prossimo task concreto da fa
 1. testare il form Tally vero contro il webhook pubblico
 2. subito dopo implementare il flusso di consegna all'artigiano
 
-Nota dall'ultimo test reale eseguito: la submit del form Tally ha mostrato la schermata di conferma, ma nei log del backend pubblico non è arrivato alcun POST /webhook. Questo suggerisce che il webhook Tally reale non sia ancora configurato correttamente verso l'endpoint pubblico attuale oppure non sia attivo nelle impostazioni del form.
+Nota dall'ultimo test reale eseguito: la submit del form Tally ha mostrato la schermata di conferma, ma nei log del backend pubblico non è arrivato alcun POST /webhook. Il backend ora espone anche un endpoint HTTPS valido (`https://34-154-56-49.sslip.io/webhook`), quindi il prossimo controllo da fare è aggiornare il webhook nelle impostazioni Tally verso questo URL e ritestare.
 
 Perché questi due sono i veri colli di bottiglia che ti impediscono oggi di partire.
 

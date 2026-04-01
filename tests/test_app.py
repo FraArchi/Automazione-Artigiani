@@ -95,6 +95,18 @@ def build_real_tally_payload(response_id: str = "resp_real"):
     }
 
 
+def test_webhook_endpoint_accepts_get_and_options_for_external_validation(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    get_response = client.get("/webhook")
+    assert get_response.status_code == 200
+    assert "POST" in get_response.json()["message"]
+
+    options_response = client.options("/webhook")
+    assert options_response.status_code == 204
+
+
 def test_webhook_with_tally_payload_sets_source_and_creates_new_lead_without_draft_quote(monkeypatch, tmp_path):
     main = load_app(monkeypatch, tmp_path)
     client = TestClient(main.app)

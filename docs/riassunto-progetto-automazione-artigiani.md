@@ -298,9 +298,9 @@ Tag istanza:
 - `automazione-artigiani-web`
 
 ### URL pubblici attuali
-- root/dashboard: `http://34.154.56.49/`
-- summary API: `http://34.154.56.49/api/dashboard/summary`
-- webhook pubblico: `http://34.154.56.49/webhook`
+- root/dashboard: `https://34-154-56-49.sslip.io/`
+- summary API: `https://34-154-56-49.sslip.io/api/dashboard/summary`
+- webhook pubblico: `https://34-154-56-49.sslip.io/webhook`
 
 Verifica già eseguita:
 - POST pubblico a `/webhook`: ok

@@ -734,6 +734,19 @@ async def api_delete_receiver(email: str):
         db.close()
 
 
+@app.get("/webhook")
+async def webhook_info():
+    return {
+        "message": "Webhook endpoint attivo. Usa POST per inviare i payload del form.",
+        "methods": ["GET", "POST", "OPTIONS"],
+    }
+
+
+@app.options("/webhook", status_code=204)
+async def webhook_options():
+    return None
+
+
 @app.post("/webhook")
 async def receive_form(request: Request):
     try:
