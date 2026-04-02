@@ -14,6 +14,7 @@ Documenti collegati:
 - docs/piano-finalizzazione-clienti-veri.md
 - docs/VERIFICA-TALLY-END-TO-END.md
 - docs/ui-direction.md
+- docs/spec/README.md
 
 ## Stato attuale in breve
 
