@@ -1,10 +1,44 @@
-venv/
-__pycache__/
-*.docx
-*.log
-.env
-node_modules/
-.DS_Store
+```
+# Database
 local.db
-quotes/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py~
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Dependencies
+venv/
+.venv/
+.env/
+
+# Tests
 .pytest_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+```
