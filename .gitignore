@@ -1,37 +1,4 @@
-# Local environment
-.env
-.env.local
-.env.*
-!.env.example
-
-# Python caches / virtualenvs
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.venv/
-venv/
-
-# Local databases and generated output
-local.db
-*.db
-*.sqlite
-*.sqlite3
-quotes/
-*.docx
-*.log
-
-# Coverage / reports
-.coverage
-coverage/
-htmlcov/
-
-# Editors / OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*.tmp
+```
+# Documentation files that might be generated
+docs/spec/*.md
+```
