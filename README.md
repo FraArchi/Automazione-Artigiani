@@ -2,17 +2,18 @@
 
 Automazione Artigiani è un progetto per gestire lead di artigiani, farli analizzare da un reviewer Hermes, generare bozze di preventivo e monitorare tutto via API, dashboard e integrazione Hermes/WhatsApp.
 
-## Documento di riferimento
+## Documento di lavoro principale
 
-Per il riepilogo completo dello stato del progetto, dell'architettura, del deploy sulla VM e dei prossimi step, leggere prima questo file:
+Per riprendere il progetto dopo una pausa, parti da qui:
 
-- [docs/riassunto-progetto-automazione-artigiani.md](docs/riassunto-progetto-automazione-artigiani.md)
+- docs/DOCUMENTO-LAVORO-ATTUALE.md
 
-## Roadmap e architettura
-
-Documento collegato:
-
-- [docs/roadmap-hermes-architettura.md](docs/roadmap-hermes-architettura.md)
+Documenti collegati:
+- docs/riassunto-progetto-automazione-artigiani.md
+- docs/roadmap-hermes-architettura.md
+- docs/piano-finalizzazione-clienti-veri.md
+- docs/VERIFICA-TALLY-END-TO-END.md
+- docs/ui-direction.md
 
 ## Stato attuale in breve
 
@@ -23,15 +24,48 @@ Documento collegato:
 - deploy always-on su VM Google Cloud con systemd
 - endpoint pubblico `/webhook` tramite nginx
 - integrazione Hermes/WhatsApp tramite comando `artigiani-status`
+- prototipo UI premium conservato come esplorazione in `prototypes/stitch/`
 
 ## File principali
 
-- `main.py`
+- `main.py` — entrypoint compatibile per FastAPI e test
+- `app/` — moduli applicativi (runtime, routes, services, models, settings)
 - `hermes_reviewer.py`
 - `scripts/artigiani_status.py`
 - `tests/`
 - `deploy/`
 - `docs/`
+- `prototypes/`
+
+## Avvio rapido dashboard locale
+
+Non serve attivare manualmente la virtualenv.
+
+```bash
+make dashboard
+```
+
+Oppure:
+
+```bash
+./scripts/start_local_dashboard.sh
+```
+
+Dashboard locale:
+
+`http://127.0.0.1:8010/`
+
+Per aprire anche il browser:
+
+```bash
+make dashboard-open
+```
+
+## Reviewer locale
+
+```bash
+make reviewer
+```
 
 ## Test
 
@@ -39,8 +73,9 @@ Documento collegato:
 ./venv/bin/python -m pytest -q
 ```
 
-## Nota pratica
+In un ambiente pulito installa le dipendenze prima dei test:
 
-Se devi riprendere il lavoro in una sessione futura, la cosa migliore è partire dal file:
-
-`docs/riassunto-progetto-automazione-artigiani.md`
+```bash
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+```

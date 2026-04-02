@@ -37,7 +37,9 @@ def load_app(monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEFAULT_RECEIVER_EMAIL", "owner@example.com")
     if "QUOTE_OUTPUT_DIR" not in os.environ:
         monkeypatch.setenv("QUOTE_OUTPUT_DIR", str(tmp_path / "quotes"))
-    monkeypatch.chdir("/home/fra/Documenti/progetti/automazione-artigiani")
+
+    project_root = Path(__file__).resolve().parents[1]
+    monkeypatch.chdir(project_root)
 
     if "main" in sys.modules:
         del sys.modules["main"]
