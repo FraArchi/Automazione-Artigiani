@@ -11,6 +11,9 @@ Già presenti:
 - endpoint `POST /webhook`
 - `detect_source()` e `normalize_payload()`
 - salvataggio di `raw_payload` e `normalized_payload`
+- endpoint interno `GET /api/leads/{id}/mapping-debug`
+- log `webhook_unmapped_fields` per campi extra non mappati
+- fixture anonimizzato derivato da payload reale in `tests/fixtures/`
 - test automatizzati sul mapping
 
 Manca ancora:

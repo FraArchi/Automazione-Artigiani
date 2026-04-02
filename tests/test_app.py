@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -72,29 +73,16 @@ def build_tally_payload(response_id: str = "resp_123"):
     }
 
 
+def load_json_fixture(name: str):
+    fixture_path = Path(__file__).resolve().parent / "fixtures" / name
+    return json.loads(fixture_path.read_text(encoding="utf-8"))
+
+
 def build_real_tally_payload(response_id: str = "resp_real"):
-    return {
-        "eventId": f"evt_{response_id}",
-        "eventType": "FORM_RESPONSE",
-        "data": {
-            "formId": "form_real",
-            "responseId": response_id,
-            "fields": [
-                {"label": "Nome artigiano", "value": "Artigiano Test Hermes"},
-                {"label": "Mestiere / tipo di attività", "value": "Elettricista"},
-                {"label": "Email artigiano", "value": "artigiano.test@example.com"},
-                {"label": "Nome del Cliente", "value": "Cliente Tally Reale"},
-                {"label": "Indirizzo del Cliente", "value": "Via Roma 123, Milano"},
-                {"label": "Descrizione del lavoro da svolgere", "value": "Installazione plafoniera e controllo impianto cucina"},
-                {"label": "Materiali necessari", "value": "Plafoniera, morsetti, minuteria"},
-                {"label": "Ore di lavoro stimate", "value": "3"},
-                {"label": "Costo orario (€)", "value": "45"},
-                {"label": "Eventuali note aggiuntive", "value": "Test Tally reale end-to-end Hermes"},
-                {"label": "Prezzo materiali (€)", "value": "60"},
-                {"label": "Urgenza del lavoro", "value": "Media"},
-            ],
-        },
-    }
+    payload = load_json_fixture("tally_real_payload_anonymized.json")
+    payload["eventId"] = f"evt_{response_id}"
+    payload["data"]["responseId"] = response_id
+    return payload
 
 
 def test_webhook_endpoint_accepts_get_and_options_for_external_validation(monkeypatch, tmp_path):
@@ -155,9 +143,38 @@ def test_real_tally_labels_are_normalized_correctly(monkeypatch, tmp_path):
     assert normalized["job_type"] == "Elettricista"
     assert normalized["description"] == "Installazione plafoniera e controllo impianto cucina"
     assert normalized["materiali"] == "60"
-    assert normalized["notes"] == "Test Tally reale end-to-end Hermes"
+    assert normalized["notes"] == "Test Tally reale anonimizzato"
     assert normalized["client_address"] == "Via Roma 123, Milano"
     assert normalized["urgency"] == "Media"
+
+
+def test_mapping_debug_endpoint_returns_unmapped_fields_for_review(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    payload = build_real_tally_payload(response_id="resp_debug")
+    payload["data"]["fields"].append({"label": "Budget massimo", "value": "2000"})
+    payload["data"]["fields"].append({"label": "Disponibilità", "value": "Sabato mattina"})
+
+    create_response = client.post("/webhook", json=payload)
+    assert create_response.status_code == 200
+    lead_id = create_response.json()["lead_id"]
+
+    debug_response = client.get(f"/api/leads/{lead_id}/mapping-debug")
+    assert debug_response.status_code == 200
+    debug = debug_response.json()
+
+    assert debug["source"] == "tally_webhook"
+    assert debug["normalized_payload"]["client_name"] == "Cliente Tally Reale"
+    assert debug["mapped_labels_by_field"]["client_name"] == "Nome del Cliente"
+    assert debug["unmapped_fields"] == {
+        "Budget massimo": "2000",
+        "Disponibilità": "Sabato mattina",
+    }
+    assert debug["missing_critical_fields"] == ["contact"]
+
+    activity = client.get("/api/activity-log?limit=10").json()["items"]
+    assert any(item["event_type"] == "webhook_unmapped_fields" for item in activity)
 
 
 def test_duplicate_webhook_returns_existing_lead_without_creating_duplicate(monkeypatch, tmp_path):

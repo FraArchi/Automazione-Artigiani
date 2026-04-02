@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from app.models import ActivityLog, Lead, Quote
 from app.services import (
     bootstrap_config,
+    build_mapping_debug,
     detect_source,
     dumps_json,
     email_sending_enabled,
@@ -94,6 +95,25 @@ def register_routes(app: FastAPI, SessionLocal, settings: Settings, smtplib_modu
             if not lead:
                 raise HTTPException(status_code=404, detail="Lead not found")
             return serialize_lead(lead)
+        finally:
+            db.close()
+
+    @app.get("/api/leads/{lead_id}/mapping-debug")
+    async def api_get_lead_mapping_debug(lead_id: int):
+        db = SessionLocal()
+        try:
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+
+            raw_payload = loads_json(lead.raw_payload, {})
+            normalized_payload = loads_json(lead.normalized_payload, {})
+            debug = build_mapping_debug(raw_payload, normalized_payload)
+            return {
+                "lead_id": lead.id,
+                "source": lead.source,
+                **debug,
+            }
         finally:
             db.close()
 
@@ -222,6 +242,7 @@ def register_routes(app: FastAPI, SessionLocal, settings: Settings, smtplib_modu
 
         source = detect_source(request, payload)
         normalized = normalize_payload(payload)
+        mapping_debug = build_mapping_debug(payload, normalized)
         initial_status = "new"
         initial_missing_fields: list[str] = []
         initial_review_summary = "Lead acquisito. In attesa della revisione Hermes."
@@ -267,6 +288,16 @@ def register_routes(app: FastAPI, SessionLocal, settings: Settings, smtplib_modu
             db.add(lead)
             db.commit()
             db.refresh(lead)
+
+            if mapping_debug["unmapped_fields"]:
+                log_event(
+                    db,
+                    "webhook_unmapped_fields",
+                    f"Campi non mappati rilevati: {', '.join(sorted(mapping_debug['unmapped_fields'].keys()))}",
+                    lead_id=lead.id,
+                    actor="system",
+                )
+
             log_event(db, "lead_created", f"Nuova richiesta ricevuta per {lead.client_name or 'cliente sconosciuto'}", lead_id=lead.id)
 
             return {

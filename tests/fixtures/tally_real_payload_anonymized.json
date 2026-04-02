@@ -1,0 +1,22 @@
+{
+  "eventId": "evt_real_fixture",
+  "eventType": "FORM_RESPONSE",
+  "data": {
+    "formId": "form_real_fixture",
+    "responseId": "resp_real_fixture",
+    "fields": [
+      {"label": "Nome artigiano", "value": "Artigiano Test Hermes"},
+      {"label": "Mestiere / tipo di attività", "value": "Elettricista"},
+      {"label": "Email artigiano", "value": "artigiano.test@example.com"},
+      {"label": "Nome del Cliente", "value": "Cliente Tally Reale"},
+      {"label": "Indirizzo del Cliente", "value": "Via Roma 123, Milano"},
+      {"label": "Descrizione del lavoro da svolgere", "value": "Installazione plafoniera e controllo impianto cucina"},
+      {"label": "Materiali necessari", "value": "Plafoniera, morsetti, minuteria"},
+      {"label": "Ore di lavoro stimate", "value": "3"},
+      {"label": "Costo orario (€)", "value": "45"},
+      {"label": "Eventuali note aggiuntive", "value": "Test Tally reale anonimizzato"},
+      {"label": "Prezzo materiali (€)", "value": "60"},
+      {"label": "Urgenza del lavoro", "value": "Media"}
+    ]
+  }
+}

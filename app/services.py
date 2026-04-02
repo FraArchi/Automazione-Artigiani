@@ -121,8 +121,8 @@ def find_duplicate_lead(db, source: str, payload: dict[str, Any]) -> Lead | None
     )
 
 
-def normalize_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
-    extracted = raw_payload
+def extract_payload_fields(raw_payload: dict[str, Any]) -> dict[str, Any]:
+    extracted = raw_payload if isinstance(raw_payload, dict) else {}
     if isinstance(raw_payload, dict) and isinstance(raw_payload.get("data"), dict):
         data_section = raw_payload.get("data", {})
         if isinstance(data_section.get("fields"), list):
@@ -131,18 +131,54 @@ def normalize_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
                 for field in data_section["fields"]
                 if isinstance(field, dict) and field.get("label")
             }
+    return extracted if isinstance(extracted, dict) else {}
+
+
+def normalize_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
+    extracted = extract_payload_fields(raw_payload)
 
     normalized: dict[str, Any] = {}
     for target_field, source_labels in FIELD_MAPPING.items():
         normalized[target_field] = next(
-            (
-                extracted.get(label)
-                for label in source_labels
-                if isinstance(extracted, dict) and extracted.get(label) not in (None, "")
-            ),
+            (extracted.get(label) for label in source_labels if extracted.get(label) not in (None, "")),
             None,
         )
     return normalized
+
+
+def build_mapping_debug(raw_payload: dict[str, Any], normalized_payload: dict[str, Any]) -> dict[str, Any]:
+    extracted = extract_payload_fields(raw_payload)
+    mapped_source_labels: list[str] = []
+    mapped_labels_by_field: dict[str, str] = {}
+
+    for target_field, source_labels in FIELD_MAPPING.items():
+        target_value = normalized_payload.get(target_field)
+        if target_value in (None, ""):
+            continue
+        for label in source_labels:
+            if extracted.get(label) == target_value:
+                mapped_source_labels.append(label)
+                mapped_labels_by_field[target_field] = label
+                break
+
+    unmapped_fields = {
+        key: value
+        for key, value in extracted.items()
+        if key not in mapped_source_labels and key not in {"eventId", "eventType", "source", "provider"}
+    }
+
+    missing_critical_fields = [field for field in REQUIRED_FOR_DRAFT if normalized_payload.get(field) in (None, "")]
+    if not normalized_payload.get("client_email") and not normalized_payload.get("client_phone"):
+        missing_critical_fields.append("contact")
+
+    return {
+        "raw_payload": raw_payload,
+        "extracted_fields": extracted,
+        "normalized_payload": normalized_payload,
+        "mapped_labels_by_field": mapped_labels_by_field,
+        "unmapped_fields": unmapped_fields,
+        "missing_critical_fields": missing_critical_fields,
+    }
 
 
 def analyze_lead(normalized: dict[str, Any]) -> tuple[str, list[str], str, str]:
