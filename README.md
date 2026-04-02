@@ -2,17 +2,17 @@
 
 Automazione Artigiani è un progetto per gestire lead di artigiani, farli analizzare da un reviewer Hermes, generare bozze di preventivo e monitorare tutto via API, dashboard e integrazione Hermes/WhatsApp.
 
-## Documento di riferimento
+## Documento di Lavoro Principale
 
-Per il riepilogo completo dello stato del progetto, dell'architettura, del deploy sulla VM e dei prossimi step, leggere prima questo file:
+Per iniziare a lavorare sul progetto o riprendere dopo una pausa, leggi prima questo file:
 
-- [docs/riassunto-progetto-automazione-artigiani.md](docs/riassunto-progetto-automazione-artigiani.md)
+- **[docs/DOCUMENTO-LAVORO-ATTUALE.md](docs/DOCUMENTO-LAVORO-ATTUALE.md)** - Panoramica completa, stato attuale, priorità e prossimi interventi
 
-## Roadmap e architettura
+## Altri Documenti di Riferimento
 
-Documento collegato:
-
-- [docs/roadmap-hermes-architettura.md](docs/roadmap-hermes-architettura.md)
+- [docs/riassunto-progetto-automazione-artigiani.md](docs/riassunto-progetto-automazione-artigiani.md) - Storia dettagliata del progetto
+- [docs/roadmap-hermes-architettura.md](docs/roadmap-hermes-architettura.md) - Architettura e roadmap strategica
+- [docs/piano-finalizzazione-clienti-veri.md](docs/piano-finalizzazione-clienti-veri.md) - Piano per clienti pilota
 
 ## Stato attuale in breve
 

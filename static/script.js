@@ -99,6 +99,14 @@ function renderNeedsReviewLead(lead) {
 function renderDraftLead(lead) {
     const quote = lead.latest_quote;
     const total = quote ? Number(quote.total).toFixed(2) : '0.00';
+    
+    // Debug info per campi non mappati
+    const normalized = lead.normalized_payload || {};
+    const unmappedFields = normalized._unmapped_fields || {};
+    const unmappedDebug = Object.keys(unmappedFields).length > 0 
+        ? `<details class=\"debug-details\"><summary>📋 ${Object.keys(unmappedFields).length} campi non mappati</summary><pre>${escapeHtml(JSON.stringify(unmappedFields, null, 2))}</pre></details>`
+        : '';
+    
     return `
         <article class="lead-card">
             <div class="lead-top">
@@ -108,6 +116,7 @@ function renderDraftLead(lead) {
             <p class="lead-meta">Fonte: ${renderSourceLabel(lead.source)}</p>
             <p>${escapeHtml(lead.description || 'Nessuna descrizione')}</p>
             <p class="lead-note">${escapeHtml(lead.review_summary || '')}</p>
+            ${unmappedDebug}
             <div class="quote-meta">
                 <span>Quote #${quote.id}</span>
                 <strong>€${total}</strong>

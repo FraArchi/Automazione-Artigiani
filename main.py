@@ -250,28 +250,57 @@ def parse_number(value: Any) -> float | None:
 
 
 def normalize_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Normalizza il payload grezzo in uno schema standard.
+    
+    Registra anche i campi non mappati per debugging e verifica dati.
+    """
     extracted = raw_payload
     if isinstance(raw_payload, dict) and isinstance(raw_payload.get("data"), dict):
         data_section = raw_payload.get("data", {})
         if isinstance(data_section.get("fields"), list):
             extracted = {field.get("label"): field.get("value") for field in data_section["fields"]}
 
-    normalized = {
-        "client_name": extracted.get("Cliente") or extracted.get("Nome") or extracted.get("Nome del Cliente") or extracted.get("client_name"),
-        "client_email": extracted.get("Email") or extracted.get("email") or extracted.get("client_email"),
-        "client_phone": extracted.get("Telefono") or extracted.get("Telefono/WhatsApp") or extracted.get("client_phone"),
-        "client_address": extracted.get("Indirizzo del Cliente") or extracted.get("Indirizzo") or extracted.get("client_address"),
-        "job_type": extracted.get("Mestiere") or extracted.get("Mestiere / tipo di attività") or extracted.get("Tipologia_Richiesta") or extracted.get("job_type"),
-        "description": extracted.get("Lavoro") or extracted.get("Descrizione del lavoro da svolgere") or extracted.get("Dettagli") or extracted.get("description"),
-        "ore": extracted.get("Ore") or extracted.get("Ore di lavoro stimate") or extracted.get("ore"),
-        "costo_orario": extracted.get("Costo orario") or extracted.get("Costo orario (€)") or extracted.get("costo_orario"),
-        "materiali": extracted.get("Prezzo materiali (€)") or extracted.get("Materiali") or extracted.get("materiali"),
-        "materiali_descrizione": extracted.get("Materiali necessari") or extracted.get("materiali_descrizione"),
-        "artisan_name": extracted.get("Nome artigiano") or extracted.get("artisan_name"),
-        "artisan_email": extracted.get("Email artigiano") or extracted.get("artisan_email"),
-        "notes": extracted.get("Note") or extracted.get("Eventuali note aggiuntive") or extracted.get("notes"),
-        "urgency": extracted.get("Urgenza del lavoro") or extracted.get("urgency"),
+    # Mappatura campi Tally → schema normalized
+    field_mapping = {
+        "client_name": ["Cliente", "Nome", "Nome del Cliente", "client_name"],
+        "client_email": ["Email", "email", "client_email"],
+        "client_phone": ["Telefono", "Telefono/WhatsApp", "client_phone"],
+        "client_address": ["Indirizzo del Cliente", "Indirizzo", "client_address"],
+        "job_type": ["Mestiere", "Mestiere / tipo di attività", "Tipologia_Richiesta", "job_type"],
+        "description": ["Lavoro", "Descrizione del lavoro da svolgere", "Dettagli", "description"],
+        "ore": ["Ore", "Ore di lavoro stimate", "ore"],
+        "costo_orario": ["Costo orario", "Costo orario (€)", "costo_orario"],
+        "materiali": ["Prezzo materiali (€)", "Materiali", "materiali"],
+        "materiali_descrizione": ["Materiali necessari", "materiali_descrizione"],
+        "artisan_name": ["Nome artigiano", "artisan_name"],
+        "artisan_email": ["Email artigiano", "artisan_email"],
+        "notes": ["Note", "Eventuali note aggiuntive", "notes"],
+        "urgency": ["Urgenza del lavoro", "urgency"],
     }
+    
+    normalized = {}
+    used_keys = set()
+    
+    for target_field, source_labels in field_mapping.items():
+        value = None
+        for label in source_labels:
+            if label in extracted and extracted[label] not in (None, ""):
+                value = extracted[label]
+                used_keys.add(label)
+                break
+        normalized[target_field] = value
+    
+    # Rileva campi non mappati (presenti nel payload ma non usati)
+    all_extracted_keys = set(extracted.keys()) if isinstance(extracted, dict) else set()
+    unmapped_keys = all_extracted_keys - used_keys
+    unmapped_fields = {key: extracted[key] for key in unmapped_keys}
+    
+    # Aggiungi metadati per debugging
+    normalized["_unmapped_fields"] = unmapped_fields
+    normalized["_raw_keys"] = list(all_extracted_keys)
+    normalized["_mapping_timestamp"] = datetime.now(timezone.utc).isoformat()
+    
     return normalized
 
 
@@ -802,6 +831,17 @@ async def receive_form(request: Request):
         db.add(lead)
         db.commit()
         db.refresh(lead)
+        
+        # Log per debugging: campi non mappati
+        unmapped = normalized.get("_unmapped_fields", {})
+        if unmapped:
+            log_event(
+                db,
+                "webhook_unmapped_fields",
+                f"Campi non mappati nel payload: {list(unmapped.keys())}",
+                lead_id=lead.id,
+            )
+        
         log_event(db, "lead_created", f"Nuova richiesta ricevuta per {lead.client_name or 'cliente sconosciuto'}", lead_id=lead.id)
 
         return {
@@ -813,6 +853,10 @@ async def receive_form(request: Request):
             "missing_fields": initial_missing_fields,
             "review_summary": initial_review_summary,
             "suggested_action": initial_suggested_action,
+            "_debug": {
+                "unmapped_fields_count": len(unmapped),
+                "raw_keys_count": len(normalized.get("_raw_keys", [])),
+            },
         }
     finally:
         db.close()
